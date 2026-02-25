@@ -40,6 +40,7 @@
                   <include>org.jdom:jdom2</include>
                   <include>org.json:json</include>
                   <include>net.sf.saxon:Saxon-HE</include>
+                  <include>org.xmlresolver:xmlresolver</include>
                 </includes>
               </artifactSet>
               <filters>

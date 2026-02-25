@@ -85,11 +85,51 @@ The shaded JAR and custom `hrv-beans.xml` are mounted into the harvester via `do
 
 ### 4. Run a CDIF harvest
 
+#### Via the harvester UI
+
 1. Open http://localhost:8083/harvester
 2. Create a new task with Input = **CDIF Sitemap (JSON-LD)**
-3. Set Sitemap URL to a CDIF sitemap (e.g. the test sitemap in `test/cdif-sitemap.xml`)
-4. Set Output = **Geoportal** with URL `http://geoportal-catalog:8080/geoportal`
+3. Set Sitemap URL to a CDIF sitemap (e.g. `http://geoportal-catalog:8080/geoportal/test/cdif-sitemap-local.xml`)
+4. Set Output = **Geoportal Server 3.x** with URL `http://geoportal-catalog:8080/geoportal`, username `gptadmin`, password `gptadmin`
 5. Execute -- records are converted from JSON-LD to ISO 19115-3 and published to the catalog
+
+#### Via the REST API
+
+```bash
+# Create a harvest task
+curl -X POST http://localhost:8083/harvester/rest/harvester/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+  "name": "CDIF Sitemap to Geoportal",
+  "source": {
+    "type": "CDIF-SITEMAP",
+    "label": "",
+    "properties": {
+      "cdif-sitemap-url": "http://geoportal-catalog:8080/geoportal/test/cdif-sitemap-local.xml"
+    }
+  },
+  "destinations": [{
+    "action": {
+      "type": "GPT",
+      "label": "",
+      "properties": {
+        "gpt-host-url": "http://geoportal-catalog:8080/geoportal",
+        "cred-username": "gptadmin",
+        "cred-password": "gptadmin"
+      }
+    }
+  }]
+}'
+# Response includes {"uuid":"<TASK_UUID>", ...}
+
+# Execute the task
+curl -X POST http://localhost:8083/harvester/rest/harvester/tasks/<TASK_UUID>/execute
+
+# Monitor progress
+curl http://localhost:8083/harvester/rest/harvester/processes
+```
+
+Tested with 77 CDIF JSON-LD records from the CDIF validation suite -- all 77 harvested successfully with 0 failures.
 
 ### 5. Migrate existing GeoNetwork records
 
@@ -116,7 +156,7 @@ geoportal-dde/
 │   ├── hrv-beans-cdif.xml           # Standalone CDIF-only bean definition
 │   └── hrv-config.xml               # (unused -- harvester configured via UI)
 ├── cdif-connector/                  # Custom Geoportal Harvester plugin
-│   ├── pom.xml                      # Maven build (shaded JAR with JDOM2, json, Saxon-HE)
+│   ├── pom.xml                      # Maven build (shaded JAR with JDOM2, json, Saxon-HE, xmlresolver)
 │   └── src/main/java/.../cdif/
 │       ├── CdifConstants.java       # Property key constants
 │       ├── CdifSitemapConnector.java # InputConnector factory (UI template, validation)
@@ -132,7 +172,8 @@ geoportal-dde/
 │   └── verify-deployment.sh         # Smoke test all endpoints
 ├── test/
 │   ├── sample-iso19115-3.xml        # Test ISO 19115-3 record
-│   └── cdif-sitemap.xml             # Test sitemap with 77 CDIF record URLs
+│   ├── cdif-sitemap.xml             # Sitemap pointing to GitHub raw URLs
+│   └── cdif-sitemap-local.xml       # Sitemap pointing to locally-mounted JSON-LD files
 └── pygeoapi-config.yml              # OGC API Records config (future)
 ```
 
@@ -142,7 +183,7 @@ The catalog uses **environment variables** for configuration (no config file ove
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `es_node` | (empty -- connects to localhost) | Elasticsearch hostname |
+| `es_node` | (empty -- connects to localhost) | Elasticsearch hostname (not a URL) |
 | `harvester_node` | (empty) | Harvester REST API URL |
 | `gpt_authentication` | `authentication-simple.xml` | Auth method |
 | `gpt_indexName` | `metadata` | ES index name |
@@ -156,14 +197,16 @@ The CDIF connector (`cdif-connector/`) is a Geoportal Harvester InputBroker that
 1. Fetches a sitemap XML from a configured URL
 2. Parses `<url>/<loc>` elements (handles `<sitemapindex>` recursion)
 3. For each URL: fetches JSON-LD, converts to intermediate XML via `org.json.XML`
-4. Normalizes keys (`schema:name` -> `schema_name`, `@id` -> `id`)
+4. Normalizes all namespace-prefixed keys (`schema:name` -> `schema_name`, `prov:wasGeneratedBy` -> `prov_wasGeneratedBy`, `@id` -> `id`, etc.)
 5. Generates a stable UUID from the `@id` field via SHA-1
 6. Applies `fromJsonCdif.xsl` (XSLT 2.0 via Saxon-HE) to produce ISO 19115-3
 7. Yields the result as a `SimpleDataReference` for the Geoportal OutputBroker
 
+Known namespace prefixes in CDIF data: `schema`, `prov`, `dcat`, `dcterms`, `cdi`, `ada`, `spdx`, `xas`. All are normalized to underscores before XSLT processing.
+
 The sitemap parsing is ported from GeoNetwork's `simpleurl.Harvester` using direct JDOM child traversal (avoids XPath issues with detached elements). The XSLT is a direct copy of GeoNetwork's `fromJsonCdif.xsl`, proven with 77 CDIF records.
 
-The connector is bundled as a shaded JAR (~5.8 MB) containing JDOM2, org.json, and Saxon-HE. The shade plugin excludes JAR signature files and the Saxon `TransformerFactory` SPI registration to avoid conflicts with the harvester's built-in XSLT processor.
+The connector is bundled as a shaded JAR (~6.6 MB) containing JDOM2, org.json, Saxon-HE, and xmlresolver. The shade plugin excludes JAR signature files and the Saxon `TransformerFactory` SPI registration to avoid conflicts with the harvester's built-in XSLT processor.
 
 ## Output formats
 

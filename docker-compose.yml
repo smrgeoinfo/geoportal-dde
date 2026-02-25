@@ -48,6 +48,10 @@ services:
     volumes:
       # Mount custom XSLTs for output transforms
       - ./xslt:/usr/local/tomcat/webapps/geoportal/WEB-INF/classes/metadata/xslt/custom
+      # Serve test data files via HTTP (accessible to harvester as http://geoportal-catalog:8080/geoportal/test/)
+      - ./test:/usr/local/tomcat/webapps/geoportal/test
+      # Mount CDIF validation JSON-LD files for local harvesting
+      - ../../CDIF/validation/testJSONMetadata:/usr/local/tomcat/webapps/geoportal/cdif
     depends_on:
       elasticsearch:
         condition: service_healthy

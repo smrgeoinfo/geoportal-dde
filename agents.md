@@ -30,6 +30,7 @@ geoportal-dde/
 | Geoportal Server Harvester | 3.0.0 | Scheduled metadata harvesting from external sources |
 | Tomcat | 9.x (JDK 11) | Servlet container for both Geoportal WARs |
 | Saxon-HE | 12.4 | XSLT 2.0 processor (bundled in CDIF connector JAR) |
+| xmlresolver | 5.2.2 | XML Catalog resolver required by Saxon-HE 12.x |
 
 ## Docker services and ports
 
@@ -47,6 +48,7 @@ Ports are offset to avoid conflicts with other services (GeoNetwork uses 9200/80
 ### Catalog
 
 - `GET /geoportal/rest/metadata/search` -- search all records (returns ES response)
+- `GET /geoportal/rest/metadata/search?q=<query>` -- keyword search
 - `GET /geoportal/rest/metadata/item/{id}` -- get a single record
 - `PUT /geoportal/rest/metadata/item/{id}` -- create/update a record (requires auth)
 - `DELETE /geoportal/rest/metadata/item/{id}` -- delete a record (requires auth)
@@ -59,9 +61,40 @@ Authentication: HTTP Basic with `gptadmin`/`gptadmin` (simple auth, configurable
 - `GET /harvester/rest/harvester/connectors/inbound` -- list input connector types
 - `GET /harvester/rest/harvester/connectors/outbound` -- list output connector types
 - `GET /harvester/rest/harvester/brokers` -- list configured brokers
-- `POST /harvester/rest/harvester/tasks` -- create a harvest task
-- `POST /harvester/rest/harvester/tasks/{id}/execute` -- run a task
-- `GET /harvester/rest/harvester/processes` -- list running processes
+- `GET /harvester/rest/harvester/tasks` -- list all tasks
+- `POST /harvester/rest/harvester/tasks` -- create a harvest task (body: TaskDefinition JSON)
+- `POST /harvester/rest/harvester/tasks/{id}/execute` -- execute a stored task
+- `POST /harvester/rest/harvester/tasks/execute` -- execute an ad-hoc task
+- `GET /harvester/rest/harvester/processes` -- list running/completed processes
+- `GET /harvester/rest/harvester/tasks/{id}/history` -- task harvesting history
+
+### Harvester task creation JSON format
+
+```json
+{
+  "name": "CDIF Sitemap to Geoportal",
+  "source": {
+    "type": "CDIF-SITEMAP",
+    "label": "",
+    "properties": {
+      "cdif-sitemap-url": "http://geoportal-catalog:8080/geoportal/test/cdif-sitemap-local.xml"
+    }
+  },
+  "destinations": [{
+    "action": {
+      "type": "GPT",
+      "label": "",
+      "properties": {
+        "gpt-host-url": "http://geoportal-catalog:8080/geoportal",
+        "cred-username": "gptadmin",
+        "cred-password": "gptadmin"
+      }
+    }
+  }]
+}
+```
+
+Key detail: `destinations` contains `LinkDefinition` objects wrapping each output connector in an `action` field. Posting bare `EntityDefinition` objects silently results in null destinations.
 
 ## The CDIF connector (`cdif-connector/`)
 
@@ -77,8 +110,14 @@ CdifSitemapBroker              CdifSitemapBroker
   .extractUrlsFromSitemap()      .convertJsonLdToIso19115()
     │                               │
     │  JDOM child traversal         │  1. org.json.XML.toString()
-    │  (handles sitemapindex        │  2. Normalize keys (schema: -> schema_)
-    │   recursion)                  │  3. Inject UUID from SHA-1(@id)
+    │  (handles sitemapindex        │  2. Normalize ALL namespace prefixes:
+    │   recursion)                  │     schema: -> schema_
+    │                               │     prov: -> prov_
+    │                               │     dcat: -> dcat_
+    │                               │     dcterms: -> dcterms_
+    │                               │     (+ cdi, ada, spdx, xas, any others)
+    │                               │     @id -> id, @type -> type
+    │                               │  3. Inject UUID from SHA-1(@id)
     │                               │  4. Apply fromJsonCdif.xsl (Saxon)
     ▼                               ▼
 List<String> urls              byte[] isoXml (ISO 19115-3)
@@ -86,6 +125,15 @@ List<String> urls              byte[] isoXml (ISO 19115-3)
                                     ▼
                               SimpleDataReference
                                 (published to catalog)
+```
+
+The key normalization uses regex replacement on XML element names:
+```java
+intermediateXml = intermediateXml
+    .replaceAll("<([a-zA-Z]+):", "<$1_")   // <prov:foo -> <prov_foo
+    .replaceAll("</([a-zA-Z]+):", "</$1_") // </prov:foo -> </prov_foo
+    .replaceAll("<@", "<")                  // <@id -> <id
+    .replaceAll("</@", "</");               // </@id -> </id
 ```
 
 ### Source files
@@ -115,7 +163,7 @@ cd cdif-connector
 mvn clean package
 ```
 
-Produces a shaded JAR (~5.8 MB) at `target/geoportal-harvester-cdif-sitemap-1.0.0.jar` that bundles JDOM2, org.json, and Saxon-HE.
+Produces a shaded JAR (~6.6 MB) at `target/geoportal-harvester-cdif-sitemap-1.0.0.jar` that bundles JDOM2, org.json, Saxon-HE, and xmlresolver.
 
 The shade plugin `<filters>` section excludes:
 - `META-INF/*.SF`, `*.DSA`, `*.RSA` -- JAR signature files that cause `Invalid signature file digest` errors in Tomcat
@@ -130,6 +178,7 @@ The shade plugin `<filters>` section excludes:
 - **`InputBroker.getBrokerUri()`** throws `URISyntaxException`, not `DataProcessorException`
 - **`SimpleDataReference`** is constructed with 7 args (brokerUri, brokerName, id, lastModifiedDate, sourceUri, inputBrokerRef, taskRef) then content is added via `addContext(MimeType, byte[])`
 - Maven artifact IDs differ from directory names: `harvester-api` (not `geoportal-harvester-api`), `commons-utils` (not `geoportal-commons-utils`)
+- **Error handling in iterator**: The `CdifIterator.next()` skips failed records and continues with the next one instead of aborting the entire harvest. Errors are logged and counted.
 
 ## XSLT transforms
 
@@ -138,10 +187,11 @@ The shade plugin `<filters>` section excludes:
 Converts CDIF JSON-LD intermediate XML to ISO 19115-3 `mdb:MD_Metadata`. This is a direct copy from the GeoNetwork fork (`iso19115-3.2018/convert/fromJsonCdif.xsl`), ~715 lines, XSLT 2.0. Proven with 77 CDIF records.
 
 Input is not raw JSON-LD but an intermediate XML produced by `org.json.XML.toString()` with key normalization applied:
-- `schema:name` -> `schema_name`
-- `@id` -> `id`
-- `@type` -> `type`
+- All namespace prefixes converted to underscores: `schema:name` -> `schema_name`, `prov:wasGeneratedBy` -> `prov_wasGeneratedBy`, etc.
+- `@id` -> `id`, `@type` -> `type`
 - A `<uuid>` element is injected with a SHA-1 hash of the `@id` value
+
+The XSLT only references `schema_*` elements; other prefixed elements (prov_, dcat_, etc.) pass through as valid XML but are not mapped to ISO 19115-3 fields.
 
 ### `xslt/iso19115-3-to-schemaorg.xsl`
 
@@ -189,6 +239,25 @@ curl http://localhost:8082/geoportal/rest/metadata/search
 curl http://localhost:8082/geoportal/rest/metadata/search?q=geology
 ```
 
+### Run a CDIF harvest via REST API
+
+```bash
+# Create task
+TASK_UUID=$(curl -s -X POST http://localhost:8083/harvester/rest/harvester/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+  "name": "CDIF Sitemap to Geoportal",
+  "source": {"type": "CDIF-SITEMAP", "properties": {"cdif-sitemap-url": "http://geoportal-catalog:8080/geoportal/test/cdif-sitemap-local.xml"}},
+  "destinations": [{"action": {"type": "GPT", "properties": {"gpt-host-url": "http://geoportal-catalog:8080/geoportal", "cred-username": "gptadmin", "cred-password": "gptadmin"}}}]
+}' | python3 -c "import json,sys; print(json.load(sys.stdin)['uuid'])")
+
+# Execute
+curl -X POST "http://localhost:8083/harvester/rest/harvester/tasks/$TASK_UUID/execute"
+
+# Monitor
+curl http://localhost:8083/harvester/rest/harvester/processes
+```
+
 ### Check ES index
 
 ```bash
@@ -217,9 +286,12 @@ docker compose logs -f elasticsearch
 2. **`es_node` is a hostname, not a URL** -- setting it to `http://elasticsearch:9200` causes `UnknownHostException: http`.
 3. **Shaded JARs need signature stripping** -- Saxon-HE is signed; the shade plugin `<filters>` section excludes `META-INF/*.SF`, `*.DSA`, `*.RSA`.
 4. **Saxon SPI must be excluded from the shaded JAR** -- Saxon-HE registers itself as the default `TransformerFactory` via `META-INF/services/javax.xml.transform.TransformerFactory`. If present, it replaces the JVM's Xalan and breaks the harvester's `SimpleArcGISMetaAnalyzer` with `TransformerFactoryConfigurationError`. Our code calls Saxon's `TransformerFactoryImpl` directly, so the SPI file must be excluded.
-5. **Harvester SDK needs JDK 17+** to build (JDK 11.0.2 has TLS issues downloading from Maven Central). JDK 20 confirmed working.
-6. **Port conflicts** -- default ports (9200, 8080) likely conflict with other services. Current mapping: ES=9202, Catalog=8082, Harvester=8083.
-7. **Dockerfiles pre-expand WARs** with `jar xf` so that volume mounts targeting files inside the WAR work correctly. Mounting files into an unexpanded WAR doesn't work because Tomcat expands the WAR after container start, overwriting the mount.
+5. **Saxon-HE 12.x requires xmlresolver** -- `org.xmlresolver:xmlresolver:5.2.2` must be bundled in the shaded JAR. Without it, Saxon fails at runtime with `NoClassDefFoundError: org/xmlresolver/Resolver` when initializing `Configuration`.
+6. **All JSON-LD namespace prefixes must be normalized** -- CDIF JSON-LD uses prefixes like `schema:`, `prov:`, `dcat:`, `dcterms:`, `cdi:`, `ada:`, `spdx:`, `xas:`. After `org.json.XML.toString()`, these become invalid XML element names (unbound namespace prefixes). The broker normalizes ALL `prefix:name` patterns to `prefix_name` using regex on XML element tags.
+7. **Harvester SDK needs JDK 17+** to build (JDK 11.0.2 has TLS issues downloading from Maven Central). JDK 20 confirmed working.
+8. **Port conflicts** -- default ports (9200, 8080) likely conflict with other services. Current mapping: ES=9202, Catalog=8082, Harvester=8083.
+9. **Dockerfiles pre-expand WARs** with `jar xf` so that volume mounts targeting files inside the WAR work correctly. Mounting files into an unexpanded WAR doesn't work because Tomcat expands the WAR after container start, overwriting the mount.
+10. **Harvester task `destinations` format** -- each destination must be wrapped in a `LinkDefinition` with an `action` field containing the `EntityDefinition`. Posting bare `EntityDefinition` objects in the destinations array silently creates a task with null destinations (Jackson ignores unknown properties).
 
 ## Migration context
 
@@ -234,3 +306,12 @@ Geoportal Server was chosen because:
 - ES 8.x works natively (no compatibility patches)
 - Customizations are profiles and plugins in their own directories
 - Simpler architecture (2 WARs + ES, no PostgreSQL)
+
+## Verified test results
+
+The CDIF harvest pipeline has been end-to-end tested:
+- **77/77 CDIF records** harvested successfully from sitemap
+- **0 harvest failures, 0 publish failures**
+- All records correctly identified as `iso19115-3` metadata type
+- Titles, abstracts, keywords, and other fields properly extracted
+- Records searchable via catalog REST API and ES index

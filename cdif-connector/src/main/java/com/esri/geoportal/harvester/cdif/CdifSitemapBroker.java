@@ -292,9 +292,13 @@ public class CdifSitemapBroker implements InputBroker {
         // Replaces special chars: "schema:name" -> "schema_name", "@id" -> "id"
         String intermediateXml = XML.toString(jsonObj, "record");
 
-        // Normalize key names: colons to underscores, remove @ prefix
+        // Normalize key names in XML element names:
+        // - Replace namespace colons with underscores in tags
+        //   (schema:name -> schema_name, prov:wasGeneratedBy -> prov_wasGeneratedBy, etc.)
+        // - Remove @ prefix from element names (@id -> id, @type -> type)
         intermediateXml = intermediateXml
-            .replaceAll("schema:", "schema_")
+            .replaceAll("<([a-zA-Z]+):", "<$1_")
+            .replaceAll("</([a-zA-Z]+):", "</$1_")
             .replaceAll("<@", "<")
             .replaceAll("</@", "</");
 
@@ -417,6 +421,12 @@ public class CdifSitemapBroker implements InputBroker {
                 errorCount++;
                 LOG.error("Failed to convert record {}/{}: {} - {}",
                     index, urls.size(), url, e.getMessage());
+                // Skip this record and try the next one instead of
+                // aborting the entire harvest
+                if (hasNext()) {
+                    LOG.warn("Skipping failed record, continuing with next...");
+                    return next();
+                }
                 throw new DataInputException(CdifSitemapBroker.this,
                     "Failed to process " + url, e);
             }
