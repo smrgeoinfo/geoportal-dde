@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+  <!-- Services -->
+  <bean class="com.esri.geoportal.harvester.beans.GeometryServiceBean" id="geometryService" destroy-method="close">
+    <constructor-arg value="${geometry.service.url}"/>
+  </bean>
+  <bean class="com.esri.geoportal.harvester.beans.ProfilesServiceBean" id="profilesService" init-method="init">
+    <constructor-arg value="${csw.profiles.folder}"/>
+  </bean>
+
+  <bean class="com.esri.geoportal.harvester.engine.defaults.DefaultEngine" autowire="constructor" init-method="init"/>
+  <bean class="com.esri.geoportal.harvester.engine.defaults.DefaultProcessor" autowire="constructor"/>
+  <bean class="com.esri.geoportal.harvester.engine.defaults.DefaultBrokersService" autowire="constructor"/>
+  <bean class="com.esri.geoportal.harvester.engine.defaults.DefaultTasksService" autowire="constructor"/>
+  <bean class="com.esri.geoportal.harvester.engine.defaults.DefaultExecutionService" autowire="constructor"/>
+  <bean class="com.esri.geoportal.harvester.engine.defaults.DefaultTemplatesService" autowire="constructor"/>
+  <bean class="com.esri.geoportal.harvester.engine.defaults.DefaultTriggersService" autowire="constructor"
+    init-method="activateTriggerInstances" destroy-method="deactivateTriggerInstances"
+  />
+
+  <!-- Registers -->
+  <bean class="com.esri.geoportal.harvester.engine.registers.StatisticsRegistry"/>
+
+  <!-- Metadata Analyzers -->
+  <bean class="com.esri.geoportal.harvester.beans.MultiMetaAnalyzerBean" id="metaAnalyzer"/>
+  <bean class="com.esri.geoportal.commons.meta.xml.SimpleArcGISMetaAnalyzer"/>
+  <bean class="com.esri.geoportal.commons.meta.xml.SimpleDcMetaAnalyzer"/>
+  <bean class="com.esri.geoportal.commons.meta.xml.SimpleFgdcMetaAnalyzer"/>
+  <bean class="com.esri.geoportal.commons.meta.xml.SimpleIso19115MetaAnalyzer"/>
+  <bean class="com.esri.geoportal.commons.meta.xml.SimpleIso19115_2MetaAnalyzer"/>
+  <bean class="com.esri.geoportal.commons.meta.xml.SimpleIso19119MetaAnalyzer"/>
+
+  <!-- Metadata Builders -->
+  <bean class="com.esri.geoportal.commons.meta.js.SimpleDcMetaBuilder" id="metaBuilder"/>
+
+  <!-- Connectors -->
+  <bean class="com.esri.geoportal.harvester.agp.AgpOutputConnector">
+    <constructor-arg ref="metaAnalyzer"/>
+    <constructor-arg value="${geometry.service.url}"/>
+    <constructor-arg value="${tika.sizeLimit}"/>
+  </bean>
+  <bean class="com.esri.geoportal.harvester.agpsrc.AgpInputConnector">
+    <constructor-arg ref="metaBuilder"/>
+  </bean>
+  <bean class="com.esri.geoportal.harvester.ags.AgsConnector">
+    <constructor-arg ref="metaBuilder"/>
+    <constructor-arg ref="geometryService"/>
+  </bean>
+  <bean class="com.esri.geoportal.harvester.ckan.CkanConnector">
+    <constructor-arg ref="metaBuilder"/>
+  </bean>
+  <bean class="com.esri.geoportal.harvester.ckan.data.gov.DataGovConnector">
+    <constructor-arg ref="metaBuilder"/>
+  </bean>
+  <bean class="com.esri.geoportal.harvester.gptsrc.GptConnector"/>
+  <bean class="com.esri.geoportal.harvester.csw.CswConnector">
+    <constructor-arg ref="profilesService"/>
+    <constructor-arg value="${csw.profiles.folder}"/>
+  </bean>
+  <bean class="com.esri.geoportal.harvester.folder.FolderConnector"/>
+  <bean class="com.esri.geoportal.harvester.gpt.GptConnector">
+    <constructor-arg value="${geometry.service.url}"/>
+    <constructor-arg value="${tika.sizeLimit}"/>
+  </bean>
+  <bean class="com.esri.geoportal.harvester.unc.UncConnector"/>
+  <bean class="com.esri.geoportal.harvester.waf.WafConnector"/>
+  <bean class="com.esri.geoportal.harvester.migration.MigrationConnector">
+    <constructor-arg ref="profilesService"/>
+  </bean>
+  <bean class="com.esri.geoportal.harvester.sink.SinkConnector">
+    <constructor-arg value="${sink.attempt.count}"/>
+    <constructor-arg value="${sink.attempt.delay}"/>
+  </bean>
+  <bean class="com.esri.geoportal.harvester.oai.pmh.OaiConnector"/>
+  <bean class="com.esri.geoportal.harvester.folderbig.FolderConnector"/>
+  <bean class="com.esri.geoportal.harvester.jdbc.JdbcConnector">
+    <constructor-arg value="${jdbc.script.enabled}"/>
+  </bean>
+  <bean class="com.esri.geoportal.harvester.dcat.DcatConnector">
+    <constructor-arg ref="metaBuilder"/>
+  </bean>
+  <bean class="com.esri.geoportal.harvester.thredds.ThreddsConnector"/>
+  <bean class="com.esri.geoportal.harvester.stac.StacConnector">
+    <constructor-arg ref="metaBuilder"/>
+  </bean>
+
+  <!-- CDIF Sitemap Connector (custom DDE addition) -->
+  <bean class="com.esri.geoportal.harvester.cdif.CdifSitemapConnector"/>
+
+  <!-- Triggers -->
+  <bean class="com.esri.geoportal.harvester.engine.triggers.NowTrigger"/>
+  <bean class="com.esri.geoportal.harvester.engine.triggers.AtTrigger"/>
+  <bean class="com.esri.geoportal.harvester.engine.triggers.PeriodTrigger"/>
+
+  <!-- Filters -->
+  <bean class="com.esri.geoportal.harvester.engine.filters.RegExFilter"/>
+
+  <!-- Transformers -->
+  <bean class="com.esri.geoportal.harvester.engine.transformers.XsltTransformer"/>
+
+</beans>

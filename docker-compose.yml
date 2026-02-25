@@ -23,7 +23,7 @@ services:
     volumes:
       - es-data:/usr/share/elasticsearch/data
     ports:
-      - "9200:9200"
+      - "9202:9200"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
@@ -38,17 +38,16 @@ services:
       dockerfile: Dockerfile
     container_name: geoportal-catalog
     ports:
-      - "8080:8080"
+      - "8082:8080"
     environment:
       - CATALINA_OPTS=-Xmx1g
+      # ES node hostname (used by app-context.xml ${es_node} placeholder)
+      - es_node=elasticsearch
+      # Harvester node URL
+      - harvester_node=http://geoportal-harvester:8080/harvester
     volumes:
-      # Mount custom config to override defaults inside the WAR
-      - ./catalog/app-context.xml:/usr/local/tomcat/webapps/geoportal/WEB-INF/classes/config/app-context.xml
-      - ./catalog/elastic-config.xml:/usr/local/tomcat/webapps/geoportal/WEB-INF/classes/config/elastic-config.xml
       # Mount custom XSLTs for output transforms
       - ./xslt:/usr/local/tomcat/webapps/geoportal/WEB-INF/classes/metadata/xslt/custom
-      # Mount the fromJsonCdif.xsl for CDIF conversion
-      - ./xslt/fromJsonCdif.xsl:/usr/local/tomcat/webapps/geoportal/WEB-INF/classes/metadata/xslt/fromJsonCdif.xsl
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -61,13 +60,15 @@ services:
       dockerfile: Dockerfile
     container_name: geoportal-harvester
     ports:
-      - "8081:8080"
+      - "8083:8080"
     environment:
       - CATALINA_OPTS=-Xmx512m
     volumes:
-      - ./harvester/hrv-config.xml:/usr/local/tomcat/webapps/harvester/WEB-INF/classes/config/hrv-config.xml
       # Mount the CDIF conversion XSLT where the harvester can find it
       - ./xslt/fromJsonCdif.xsl:/usr/local/tomcat/webapps/harvester/WEB-INF/classes/xslt/fromJsonCdif.xsl
+      # CDIF connector: uncomment after rebuilding JAR with signature fix
+      # - ./harvester/hrv-beans.xml:/usr/local/tomcat/webapps/harvester/WEB-INF/classes/config/hrv-beans.xml
+      # - ./cdif-connector/target/geoportal-harvester-cdif-sitemap-1.0.0.jar:/usr/local/tomcat/webapps/harvester/WEB-INF/lib/geoportal-harvester-cdif-sitemap-1.0.0.jar
     depends_on:
       elasticsearch:
         condition: service_healthy

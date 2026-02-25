@@ -135,6 +135,17 @@
                   <include>net.sf.saxon:Saxon-HE</include>
                 </includes>
               </artifactSet>
+              <!-- Strip JAR signature files to avoid "Invalid signature file digest" errors -->
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
             </configuration>
           </execution>
         </executions>
