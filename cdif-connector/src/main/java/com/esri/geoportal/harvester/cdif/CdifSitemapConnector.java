@@ -39,14 +39,7 @@ public class CdifSitemapConnector implements InputConnector<InputBroker> {
 
     @Override
     public UITemplate getTemplate(Locale locale) {
-        ResourceBundle bundle;
-        try {
-            bundle = ResourceBundle.getBundle(
-                "com.esri.geoportal.harvester.cdif.CdifResource", locale);
-        } catch (Exception e) {
-            bundle = ResourceBundle.getBundle(
-                "com.esri.geoportal.harvester.cdif.CdifResource");
-        }
+        final ResourceBundle bundle = loadBundle(locale);
 
         List<UITemplate.Argument> args = new ArrayList<>();
 
@@ -111,6 +104,16 @@ public class CdifSitemapConnector implements InputConnector<InputBroker> {
                 ? adaptor.getSitemapUrl().toExternalForm() : "";
         } catch (Exception e) {
             return "";
+        }
+    }
+
+    private static ResourceBundle loadBundle(Locale locale) {
+        try {
+            return ResourceBundle.getBundle(
+                "com.esri.geoportal.harvester.cdif.CdifResource", locale);
+        } catch (Exception e) {
+            return ResourceBundle.getBundle(
+                "com.esri.geoportal.harvester.cdif.CdifResource");
         }
     }
 }

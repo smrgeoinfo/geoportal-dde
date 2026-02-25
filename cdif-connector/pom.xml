@@ -34,15 +34,15 @@
   <dependencies>
     <!--
       Geoportal Harvester SDK (provided by the WAR at runtime).
-      Artifact IDs match the actual pom.xml in geoportal-server-harvester:
-        geoportal-SDK/geoportal-harvester-api/pom.xml       -> artifactId: geoportal-harvester-api
-        geoportal-SDK/geoportal-harvester-api-base/pom.xml  -> artifactId: harvester-api-base
-        geoportal-commons/geoportal-commons-constants/       -> artifactId: geoportal-commons-constants
-        geoportal-commons/geoportal-commons-utils/           -> artifactId: geoportal-commons-utils
+      Artifact IDs verified from local mvn install of geoportal-server-harvester v3.0.0:
+        harvester-api            (from geoportal-SDK/geoportal-harvester-api/)
+        harvester-api-base       (from geoportal-SDK/geoportal-harvester-api-base/)
+        geoportal-commons-constants (from geoportal-commons/geoportal-commons-constants/)
+        commons-utils            (from geoportal-commons/geoportal-commons-utils/)
     -->
     <dependency>
       <groupId>com.esri.geoportal</groupId>
-      <artifactId>geoportal-harvester-api</artifactId>
+      <artifactId>harvester-api</artifactId>
       <version>${geoportal.harvester.version}</version>
       <scope>provided</scope>
     </dependency>
@@ -60,7 +60,7 @@
     </dependency>
     <dependency>
       <groupId>com.esri.geoportal</groupId>
-      <artifactId>geoportal-commons-utils</artifactId>
+      <artifactId>commons-utils</artifactId>
       <version>${geoportal.harvester.version}</version>
       <scope>provided</scope>
     </dependency>
