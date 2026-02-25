@@ -115,7 +115,11 @@ cd cdif-connector
 mvn clean package
 ```
 
-Produces a shaded JAR (~5.7 MB) at `target/geoportal-harvester-cdif-sitemap-1.0.0.jar` that bundles JDOM2, org.json, and Saxon-HE. The shade plugin strips JAR signature files to avoid `Invalid signature file digest` errors when deployed in Tomcat.
+Produces a shaded JAR (~5.8 MB) at `target/geoportal-harvester-cdif-sitemap-1.0.0.jar` that bundles JDOM2, org.json, and Saxon-HE.
+
+The shade plugin `<filters>` section excludes:
+- `META-INF/*.SF`, `*.DSA`, `*.RSA` -- JAR signature files that cause `Invalid signature file digest` errors in Tomcat
+- `META-INF/services/javax.xml.transform.TransformerFactory` -- Saxon's SPI registration that would override the JVM's default Xalan processor, breaking the harvester's built-in `SimpleArcGISMetaAnalyzer` and other beans that call `TransformerFactory.newInstance()`. Our code uses `new TransformerFactoryImpl()` directly so the SPI is not needed.
 
 ### Important implementation details
 
@@ -212,9 +216,10 @@ docker compose logs -f elasticsearch
 1. **Catalog `app-context.xml` must not be replaced** -- it imports security config. Use env vars instead.
 2. **`es_node` is a hostname, not a URL** -- setting it to `http://elasticsearch:9200` causes `UnknownHostException: http`.
 3. **Shaded JARs need signature stripping** -- Saxon-HE is signed; the shade plugin `<filters>` section excludes `META-INF/*.SF`, `*.DSA`, `*.RSA`.
-4. **Harvester SDK needs JDK 17+** to build (JDK 11.0.2 has TLS issues downloading from Maven Central). JDK 20 confirmed working.
-5. **Port conflicts** -- default ports (9200, 8080) likely conflict with other services. Current mapping: ES=9202, Catalog=8082, Harvester=8083.
-6. **Dockerfiles pre-expand WARs** with `jar xf` so that volume mounts targeting files inside the WAR work correctly. Mounting files into an unexpanded WAR doesn't work because Tomcat expands the WAR after container start, overwriting the mount.
+4. **Saxon SPI must be excluded from the shaded JAR** -- Saxon-HE registers itself as the default `TransformerFactory` via `META-INF/services/javax.xml.transform.TransformerFactory`. If present, it replaces the JVM's Xalan and breaks the harvester's `SimpleArcGISMetaAnalyzer` with `TransformerFactoryConfigurationError`. Our code calls Saxon's `TransformerFactoryImpl` directly, so the SPI file must be excluded.
+5. **Harvester SDK needs JDK 17+** to build (JDK 11.0.2 has TLS issues downloading from Maven Central). JDK 20 confirmed working.
+6. **Port conflicts** -- default ports (9200, 8080) likely conflict with other services. Current mapping: ES=9202, Catalog=8082, Harvester=8083.
+7. **Dockerfiles pre-expand WARs** with `jar xf` so that volume mounts targeting files inside the WAR work correctly. Mounting files into an unexpanded WAR doesn't work because Tomcat expands the WAR after container start, overwriting the mount.
 
 ## Migration context
 

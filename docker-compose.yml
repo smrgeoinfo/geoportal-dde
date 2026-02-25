@@ -66,9 +66,9 @@ services:
     volumes:
       # Mount the CDIF conversion XSLT where the harvester can find it
       - ./xslt/fromJsonCdif.xsl:/usr/local/tomcat/webapps/harvester/WEB-INF/classes/xslt/fromJsonCdif.xsl
-      # CDIF connector: uncomment after rebuilding JAR with signature fix
-      # - ./harvester/hrv-beans.xml:/usr/local/tomcat/webapps/harvester/WEB-INF/classes/config/hrv-beans.xml
-      # - ./cdif-connector/target/geoportal-harvester-cdif-sitemap-1.0.0.jar:/usr/local/tomcat/webapps/harvester/WEB-INF/lib/geoportal-harvester-cdif-sitemap-1.0.0.jar
+      # CDIF connector: custom hrv-beans.xml registers the connector, JAR provides the classes
+      - ./harvester/hrv-beans.xml:/usr/local/tomcat/webapps/harvester/WEB-INF/classes/config/hrv-beans.xml
+      - ./cdif-connector/target/geoportal-harvester-cdif-sitemap-1.0.0.jar:/usr/local/tomcat/webapps/harvester/WEB-INF/lib/geoportal-harvester-cdif-sitemap-1.0.0.jar
     depends_on:
       elasticsearch:
         condition: service_healthy

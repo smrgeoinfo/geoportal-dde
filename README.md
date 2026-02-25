@@ -62,36 +62,26 @@ curl -X PUT -u gptadmin:gptadmin \
   http://localhost:8082/geoportal/rest/metadata/item/test-dde-001
 ```
 
-### 3. Build and install the CDIF connector
+### 3. Build the CDIF connector (optional -- only needed after code changes)
 
-Prerequisites: clone and build the Geoportal Harvester SDK (needed once):
+The CDIF connector JAR is volume-mounted into the harvester container. To rebuild it after code changes:
+
+Prerequisites (one-time): clone and build the Geoportal Harvester SDK:
 
 ```bash
 git clone https://github.com/Esri/geoportal-server-harvester.git
 cd geoportal-server-harvester && git checkout v3.0.0
 mvn clean install -DskipTests
-cd ..
 ```
 
-Build the connector:
+Build the connector and restart the harvester:
 
 ```bash
-cd cdif-connector
-mvn clean package
-```
-
-Enable the connector by uncommenting the two volume mounts in `docker-compose.yml` under `geoportal-harvester`:
-
-```yaml
-- ./harvester/hrv-beans.xml:/usr/local/tomcat/webapps/harvester/WEB-INF/classes/config/hrv-beans.xml
-- ./cdif-connector/target/geoportal-harvester-cdif-sitemap-1.0.0.jar:/usr/local/tomcat/webapps/harvester/WEB-INF/lib/geoportal-harvester-cdif-sitemap-1.0.0.jar
-```
-
-Then recreate the harvester:
-
-```bash
+cd cdif-connector && mvn clean package
 docker compose up -d geoportal-harvester --force-recreate
 ```
+
+The shaded JAR and custom `hrv-beans.xml` are mounted into the harvester via `docker-compose.yml`.
 
 ### 4. Run a CDIF harvest
 
@@ -172,6 +162,8 @@ The CDIF connector (`cdif-connector/`) is a Geoportal Harvester InputBroker that
 7. Yields the result as a `SimpleDataReference` for the Geoportal OutputBroker
 
 The sitemap parsing is ported from GeoNetwork's `simpleurl.Harvester` using direct JDOM child traversal (avoids XPath issues with detached elements). The XSLT is a direct copy of GeoNetwork's `fromJsonCdif.xsl`, proven with 77 CDIF records.
+
+The connector is bundled as a shaded JAR (~5.8 MB) containing JDOM2, org.json, and Saxon-HE. The shade plugin excludes JAR signature files and the Saxon `TransformerFactory` SPI registration to avoid conflicts with the harvester's built-in XSLT processor.
 
 ## Output formats
 
