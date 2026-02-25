@@ -1,0 +1,83 @@
+# pygeoapi configuration for OGC API Records (Phase 5).
+#
+# Reads from the same Elasticsearch index that Geoportal Catalog uses,
+# providing OGC API Records endpoints without any code changes to the catalog.
+#
+# Usage:
+#   Add to docker-compose.yml:
+#     pygeoapi:
+#       image: geopython/pygeoapi:latest
+#       ports:
+#         - "5000:80"
+#       volumes:
+#         - ./pygeoapi-config.yml:/pygeoapi/local.config.yml
+
+server:
+  bind:
+    host: 0.0.0.0
+    port: 80
+  url: http://localhost:5000
+  mimetype: application/json; charset=UTF-8
+  encoding: utf-8
+  gzip: false
+  language: en-US
+  cors: true
+  pretty_print: true
+  limit: 10
+  map:
+    url: https://tile.openstreetmap.org/{z}/{x}/{y}.png
+    attribution: '&copy; OpenStreetMap contributors'
+
+logging:
+  level: ERROR
+
+metadata:
+  identification:
+    title: DDE Metadata Catalog - OGC API Records
+    description: Deep-time Digital Earth metadata catalog providing OGC API Records access to ISO 19115-3 metadata.
+    keywords:
+      - DDE
+      - metadata
+      - geology
+      - deep-time
+      - CDIF
+      - ISO 19115-3
+    keywords_type: theme
+    terms_of_service: https://www.ddeworld.org/
+    url: https://www.ddeworld.org/
+  license:
+    name: CC-BY 4.0 license
+    url: https://creativecommons.org/licenses/by/4.0/
+  provider:
+    name: Deep-time Digital Earth
+    url: https://www.ddeworld.org/
+  contact:
+    name: DDE Secretariat
+    role: pointOfContact
+    email: info@ddeworld.org
+
+resources:
+  metadata-records:
+    type: collection
+    title: Metadata Records
+    description: ISO 19115-3 metadata records from the DDE catalog
+    keywords:
+      - metadata
+      - ISO 19115-3
+      - CDIF
+    links:
+      - type: text/html
+        rel: canonical
+        title: Geoportal Catalog
+        href: http://localhost:8080/geoportal
+    extents:
+      spatial:
+        bbox: [-180, -90, 180, 90]
+        crs: http://www.opengis.net/def/crs/OGC/1.3/CRS84
+    providers:
+      - type: record
+        name: Elasticsearch
+        # Point at the same ES index that Geoportal Catalog uses
+        data: http://elasticsearch:9200/metadata
+        id_field: fileid
+        time_field: sys_modified_dt

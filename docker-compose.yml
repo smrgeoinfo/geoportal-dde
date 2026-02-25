@@ -1,0 +1,93 @@
+version: '3.8'
+
+# Esri Geoportal Server stack for DDE/CDIF catalog
+# Components: Elasticsearch 8.14.3, Geoportal Catalog, Geoportal Harvester
+
+services:
+
+  # --- Elasticsearch 8.14.3 (sole datastore) ---
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+    container_name: geoportal-es
+    environment:
+      - cluster.name=geoportal-cluster
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # --- Geoportal Catalog (Tomcat 9 + WAR) ---
+  # Serves: metadata profiles, search UI, editor, CSW 2/3, XSLT transforms
+  geoportal-catalog:
+    build:
+      context: ./catalog
+      dockerfile: Dockerfile
+    container_name: geoportal-catalog
+    ports:
+      - "8080:8080"
+    environment:
+      - CATALINA_OPTS=-Xmx1g
+    volumes:
+      # Mount custom config to override defaults inside the WAR
+      - ./catalog/app-context.xml:/usr/local/tomcat/webapps/geoportal/WEB-INF/classes/config/app-context.xml
+      - ./catalog/elastic-config.xml:/usr/local/tomcat/webapps/geoportal/WEB-INF/classes/config/elastic-config.xml
+      # Mount custom XSLTs for output transforms
+      - ./xslt:/usr/local/tomcat/webapps/geoportal/WEB-INF/classes/metadata/xslt/custom
+      # Mount the fromJsonCdif.xsl for CDIF conversion
+      - ./xslt/fromJsonCdif.xsl:/usr/local/tomcat/webapps/geoportal/WEB-INF/classes/metadata/xslt/fromJsonCdif.xsl
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # --- Geoportal Harvester (Tomcat 9 + WAR) ---
+  # Runs: CDIF sitemap InputBroker, Geoportal OutputBroker
+  geoportal-harvester:
+    build:
+      context: ./harvester
+      dockerfile: Dockerfile
+    container_name: geoportal-harvester
+    ports:
+      - "8081:8080"
+    environment:
+      - CATALINA_OPTS=-Xmx512m
+    volumes:
+      - ./harvester/hrv-config.xml:/usr/local/tomcat/webapps/harvester/WEB-INF/classes/config/hrv-config.xml
+      # Mount the CDIF conversion XSLT where the harvester can find it
+      - ./xslt/fromJsonCdif.xsl:/usr/local/tomcat/webapps/harvester/WEB-INF/classes/xslt/fromJsonCdif.xsl
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      geoportal-catalog:
+        condition: service_started
+
+  # --- Kibana (optional, for debugging ES index) ---
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.14.3
+    container_name: geoportal-kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    profiles:
+      - debug
+
+volumes:
+  es-data:
+    driver: local

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Geoportal Catalog Spring context configuration.
+     This file overrides defaults inside the WAR to point at our
+     Docker Compose Elasticsearch instance. -->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+  <!-- Elasticsearch configuration -->
+  <bean id="elasticContext" class="com.esri.geoportal.lib.elastic.ElasticContext">
+    <!-- Node list: hostname:port pairs for the ES HTTP API -->
+    <property name="nodes">
+      <list>
+        <value>http://elasticsearch:9200</value>
+      </list>
+    </property>
+    <!-- Index name prefix for metadata records -->
+    <property name="indexName" value="metadata"/>
+    <!-- Allow auto-creation of the index on first publish -->
+    <property name="autoCreateIndex" value="true"/>
+  </bean>
+
+</beans>

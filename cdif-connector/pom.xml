@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.esri.geoportal</groupId>
+  <artifactId>geoportal-harvester-cdif-sitemap</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <name>Geoportal Harvester - CDIF Sitemap Connector</name>
+  <description>
+    InputBroker that follows sitemaps.org protocol to discover CDIF JSON-LD
+    metadata records, converts them to ISO 19115-3 via XSLT, and publishes
+    to Geoportal Server Catalog.
+
+    Build prerequisites:
+      Clone and mvn install geoportal-server-harvester v3.0.0 first:
+        git clone https://github.com/Esri/geoportal-server-harvester.git
+        cd geoportal-server-harvester
+        git checkout v3.0.0
+        mvn clean install -DskipTests
+  </description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.source>11</maven.compiler.source>
+    <maven.compiler.target>11</maven.compiler.target>
+    <geoportal.harvester.version>3.0.0</geoportal.harvester.version>
+  </properties>
+
+  <dependencies>
+    <!--
+      Geoportal Harvester SDK (provided by the WAR at runtime).
+      Artifact IDs match the actual pom.xml in geoportal-server-harvester:
+        geoportal-SDK/geoportal-harvester-api/pom.xml       -> artifactId: geoportal-harvester-api
+        geoportal-SDK/geoportal-harvester-api-base/pom.xml  -> artifactId: harvester-api-base
+        geoportal-commons/geoportal-commons-constants/       -> artifactId: geoportal-commons-constants
+        geoportal-commons/geoportal-commons-utils/           -> artifactId: geoportal-commons-utils
+    -->
+    <dependency>
+      <groupId>com.esri.geoportal</groupId>
+      <artifactId>geoportal-harvester-api</artifactId>
+      <version>${geoportal.harvester.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.esri.geoportal</groupId>
+      <artifactId>harvester-api-base</artifactId>
+      <version>${geoportal.harvester.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.esri.geoportal</groupId>
+      <artifactId>geoportal-commons-constants</artifactId>
+      <version>${geoportal.harvester.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.esri.geoportal</groupId>
+      <artifactId>geoportal-commons-utils</artifactId>
+      <version>${geoportal.harvester.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- HTTP client (provided by Tomcat/WAR at runtime) -->
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+      <version>4.5.14</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- XML processing (bundled into the shaded JAR) -->
+    <dependency>
+      <groupId>org.jdom</groupId>
+      <artifactId>jdom2</artifactId>
+      <version>2.0.6.1</version>
+    </dependency>
+
+    <!-- JSON processing (bundled into the shaded JAR) -->
+    <dependency>
+      <groupId>org.json</groupId>
+      <artifactId>json</artifactId>
+      <version>20231013</version>
+    </dependency>
+
+    <!-- XSLT 2.0 processor for fromJsonCdif.xsl (bundled into the shaded JAR) -->
+    <dependency>
+      <groupId>net.sf.saxon</groupId>
+      <artifactId>Saxon-HE</artifactId>
+      <version>12.4</version>
+    </dependency>
+
+    <!-- Logging (provided by Tomcat) -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>1.7.36</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+        <configuration>
+          <source>11</source>
+          <target>11</target>
+        </configuration>
+      </plugin>
+      <!--
+        Build a shaded JAR that bundles JDOM2, json, and Saxon-HE.
+        The Geoportal Harvester API JARs are 'provided' (already in the WAR).
+        Only our own code + these 3 libraries get bundled.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.5.1</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals><goal>shade</goal></goals>
+            <configuration>
+              <artifactSet>
+                <includes>
+                  <include>org.jdom:jdom2</include>
+                  <include>org.json:json</include>
+                  <include>net.sf.saxon:Saxon-HE</include>
+                </includes>
+              </artifactSet>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

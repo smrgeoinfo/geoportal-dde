@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Harvester configuration pointing at the Geoportal Catalog REST API.
+     The harvester pushes records to the catalog via its REST endpoint. -->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+  <!-- Default Geoportal output target for all harvest tasks -->
+  <bean id="defaultGeoportalTarget" class="java.util.LinkedHashMap">
+    <constructor-arg>
+      <map>
+        <entry key="gpt-host-url" value="http://geoportal-catalog:8080/geoportal"/>
+        <!-- Credentials for publishing (admin user in Geoportal) -->
+        <entry key="cred-username" value="gptadmin"/>
+        <entry key="cred-password" value="gptadmin"/>
+      </map>
+    </constructor-arg>
+  </bean>
+
+</beans>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spring bean registration for the CDIF Sitemap connector.
+
+  Add this to the harvester's hrv-beans.xml or import it from there:
+    <import resource="classpath:config/hrv-beans-cdif.xml"/>
+
+  Alternatively, copy the <bean> element below into the existing hrv-beans.xml
+  alongside the other connector registrations (WAF, CSW, STAC, etc.).
+-->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+  <!-- CDIF Sitemap InputConnector: harvests JSON-LD from sitemaps -->
+  <bean class="com.esri.geoportal.harvester.cdif.CdifSitemapConnector"/>
+
+</beans>
